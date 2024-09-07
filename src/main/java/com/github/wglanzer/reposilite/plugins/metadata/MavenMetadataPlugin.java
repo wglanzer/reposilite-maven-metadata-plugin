@@ -20,6 +20,8 @@ import java.util.*;
 import static com.fasterxml.jackson.databind.SerializationFeature.INDENT_OUTPUT;
 
 /**
+ * Main entry point for this reposilite plugin
+ *
  * @author w.glanzer, 07.09.2024
  */
 @Plugin(name = "metadata", dependencies = "maven")

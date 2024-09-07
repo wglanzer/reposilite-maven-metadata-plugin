@@ -19,7 +19,7 @@ class MavenMetadataMerger
   private final Set<Metadata> metadataSet = new HashSet<>();
 
   /**
-   * Adds the given {@link Metadata} to the list of metadatas to merge
+   * Adds the given {@link Metadata} to the list of metadata to merge
    *
    * @param pMetadata metadata that should be merged
    */
