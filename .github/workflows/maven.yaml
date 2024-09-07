@@ -18,7 +18,7 @@ jobs:
           distribution: 'temurin'
 
       # build project with maven
-      - run: mvn --batch-mode --update-snapshots package
+      - run: mvn -T 1C --batch-mode --update-snapshots package
 
       # upload the artifact
       - run: mkdir staging && cp target/*-all.jar staging
