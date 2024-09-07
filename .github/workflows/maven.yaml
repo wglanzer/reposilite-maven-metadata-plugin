@@ -1,0 +1,27 @@
+name: Java CI with Maven
+
+on:
+  push:
+    branches: [ $default-branch ]
+
+jobs:
+  builds:
+    runs-on: ubuntu-latest
+    steps:
+      # checkout the project
+      - uses: actions/checkout@v4
+
+      # setup java
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+
+      # build project with maven
+      - run: mvn --batch-mode --update-snapshots package
+
+      # upload the artifact
+      - run: mkdir staging && cp target/*-all.jar staging
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Package
+          path: staging
