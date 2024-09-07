@@ -15,6 +15,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           java-version: '21'
+          distribution: 'temurin'
 
       # build project with maven
       - run: mvn --batch-mode --update-snapshots package
