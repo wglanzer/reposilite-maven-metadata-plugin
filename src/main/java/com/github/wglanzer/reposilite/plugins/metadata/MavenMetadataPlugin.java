@@ -63,7 +63,7 @@ public class MavenMetadataPlugin extends ReposilitePlugin
           MavenMetadataMerger merger = new MavenMetadataMerger();
 
           // find current metadata on local storage
-          pEvent.getRepository().getStorageProvider()
+          Metadata currentMetadata = pEvent.getRepository().getStorageProvider()
               .getFile(pEvent.getGav())
               .map(pStream -> {
                 try
@@ -76,7 +76,16 @@ public class MavenMetadataPlugin extends ReposilitePlugin
                   return null;
                 }
               })
-              .peek(merger::add);
+              .peek(merger::add)
+              .orNull();
+
+          // if we got a current metadata file already, we can check the validity without scraping the mirrors.
+          // This should save us a lot of calculating time.
+          if (currentMetadata != null && !validateCoordinates(currentMetadata, pEvent.getGav()))
+          {
+            getLogger().info("Not storing generated maven-metadata.xml for {}, because it looks like a metadata for a specific version", pEvent.getGav());
+            return;
+          }
 
           // collect all metadata from mirrors
           for (MirrorHost mirror : pEvent.getRepository().getMirrorHosts())
@@ -92,6 +101,13 @@ public class MavenMetadataPlugin extends ReposilitePlugin
 
           // merge the metadata now
           Metadata mergedMeta = merger.merge();
+
+          // validate the created metadata to get sure, that we do not store metadata for specific versions
+          if (!validateCoordinates(mergedMeta, pEvent.getGav()))
+          {
+            getLogger().info("Not storing generated maven-metadata.xml for {}, because it looks like a metadata for a specific version", pEvent.getGav());
+            return;
+          }
 
           // upload the merged file
           extensions().facade(MavenFacade.class).saveMetadata(new SaveMetadataRequest(pEvent.getRepository(), pEvent.getGav(), mergedMeta));
@@ -160,6 +176,24 @@ public class MavenMetadataPlugin extends ReposilitePlugin
           }
         })
         .orNull();
+  }
+
+  /**
+   * Validates, if the given {@link Metadata} can be stored under the given location.
+   * This is used to get sure, that we do not override any children - only root metadata files, with its links.
+   *
+   * @param pMetadata Metadata to validate
+   * @param pLocation Location to validate against
+   * @return true, if the metadata can be stored at the given location
+   */
+  @SuppressWarnings("BooleanMethodIsAlwaysInverted") // clearer naming
+  private boolean validateCoordinates(@NonNls Metadata pMetadata, @NonNls Location pLocation)
+  {
+    if (pMetadata.getGroupId() == null || pMetadata.getArtifactId() == null)
+      return true;
+
+    String metadataRootCoordinates = pMetadata.getGroupId().replace('.', '/') + "/" + pMetadata.getArtifactId() + "/maven-metadata.xml";
+    return pLocation.equals(Location.of(metadataRootCoordinates));
   }
 
 }
