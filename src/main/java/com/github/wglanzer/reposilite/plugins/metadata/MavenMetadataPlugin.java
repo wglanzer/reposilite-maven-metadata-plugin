@@ -84,17 +84,20 @@ public class MavenMetadataPlugin extends ReposilitePlugin
           // if we got a current metadata file already, we can check the validity without scraping the mirrors.
           // This should save us a lot of calculating time.
           if (currentMetadata != null && !validateCoordinates(currentMetadata, pEvent.getGav()))
-          {
-            getLogger().info("Not storing generated maven-metadata.xml for {}, because it looks like a metadata for a specific version", pEvent.getGav());
             return;
-          }
 
           // collect all metadata from mirrors
           for (MirrorHost mirror : pEvent.getRepository().getMirrorHosts())
           {
             Metadata mirrorMetadata = downloadMetadataFromMirror(mirror, pEvent.getGav());
             if (mirrorMetadata != null)
+            {
+              // validate here too, because we may now be able to resolve all necessary data
+              if (!validateCoordinates(mirrorMetadata, pEvent.getGav()))
+                return;
+
               merger.add(mirrorMetadata);
+            }
           }
 
           // if we got no mirrors, do not merge them
@@ -106,10 +109,7 @@ public class MavenMetadataPlugin extends ReposilitePlugin
 
           // validate the created metadata to get sure, that we do not store metadata for specific versions
           if (!validateCoordinates(mergedMeta, pEvent.getGav()))
-          {
-            getLogger().info("Not storing generated maven-metadata.xml for {}, because it looks like a metadata for a specific version", pEvent.getGav());
             return;
-          }
 
           // upload the merged file
           extensions().facade(MavenFacade.class).saveMetadata(new SaveMetadataRequest(pEvent.getRepository(), pEvent.getGav(), mergedMeta));
@@ -195,7 +195,13 @@ public class MavenMetadataPlugin extends ReposilitePlugin
       return true;
 
     String metadataRootCoordinates = pMetadata.getGroupId().replace('.', '/') + "/" + pMetadata.getArtifactId() + "/maven-metadata.xml";
-    return pLocation.equals(Location.of(metadataRootCoordinates));
+    if (!pLocation.equals(Location.of(metadataRootCoordinates)))
+    {
+      getLogger().info("Metadata of {} can not be refreshed, because it is not the root metadata file", pLocation);
+      return false;
+    }
+
+    return true;
   }
 
 }
