@@ -60,7 +60,7 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-assembly-plugin</artifactId>
         <configuration>
-          <finalName>metadata-plugin-${version}-all</finalName>
+          <finalName>metadata-plugin-${project.version}-all</finalName>
           <descriptorRefs>
             <descriptorRef>jar-with-dependencies</descriptorRef>
           </descriptorRefs>
