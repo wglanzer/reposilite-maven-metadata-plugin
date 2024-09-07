@@ -83,10 +83,6 @@ class MavenMetadataMerger
         .max(Comparator.comparing(ComparableVersion::new))
         .orElse(null);
 
-    //todo snapshot / snapshotVersions
-    //snapshot = originalVersioning == null ? null : originalVersioning.getSnapshot();
-    //snapshotVersions = originalVersioning == null ? null : originalVersioning.getSnapshotVersions();
-
     // Update Versions
     versions = new ArrayList<>();
     for (Metadata mergeMeta : metadataSet)
@@ -101,7 +97,7 @@ class MavenMetadataMerger
     versions.sort(Comparator.comparing(ComparableVersion::new));
 
     // Create a new Metadata instance and return
-    return new Metadata(groupId, artifactId, null, new Versioning(release, latest, versions, snapshot, snapshotVersions, lastUpdated), null);
+    return new Metadata(groupId, artifactId, null, new Versioning(release, latest, versions, null, null, lastUpdated), null);
   }
 
 }
