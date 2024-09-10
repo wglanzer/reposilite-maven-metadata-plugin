@@ -16,6 +16,7 @@ import panda.std.Result;
 import java.nio.file.attribute.FileTime;
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static com.fasterxml.jackson.databind.SerializationFeature.INDENT_OUTPUT;
 
@@ -37,6 +38,12 @@ public class MavenMetadataMergePlugin extends ReposilitePlugin
       .build();
 
   private final Set<PreResolveEvent> processingEvents = Collections.synchronizedSet(new HashSet<>());
+
+  /**
+   * Cache that contains requests to non existing locations.
+   * This gets used to prevent asking the mirrors too often for invalid locations...
+   */
+  private final Map<Map.Entry<Repository, Location>, Instant> invalidLookupRequestCache = new ConcurrentHashMap<>();
 
   @Nullable
   @Override
@@ -124,6 +131,9 @@ public class MavenMetadataMergePlugin extends ReposilitePlugin
       }
     });
 
+    // Invalidate the requestCache on deploy - the artifacts may be there now
+    extensions().registerEvent(DeployEvent.class, pEvent -> invalidLookupRequestCache.clear());
+
     return null;
   }
 
@@ -136,14 +146,27 @@ public class MavenMetadataMergePlugin extends ReposilitePlugin
    */
   private boolean shouldRegenerateMetadata(@NonNls Repository pRepository, @NonNls Location pGav)
   {
+    // Try to resolve the real "lastModified" timestamp
     Result<FileTime, ErrorResponse> lastModifiedTimeResult = pRepository.getStorageProvider().getLastModifiedTime(pGav);
     if (lastModifiedTimeResult.isOk())
+      // check, if we should try to recaluclate it again
       return lastModifiedTimeResult.get().toInstant()
           .plusSeconds(pRepository.getMetadataMaxAgeInSeconds())
           .isBefore(Instant.now());
 
-    // we did not find the file -> regenerate
-    return true;
+
+    // we did not find the file on our local storage -> lookup in request cache to prevent invalids from spamming to the mirrors
+    Instant lastLookupRequest = invalidLookupRequestCache.get(Map.entry(pRepository, pGav));
+    if (lastLookupRequest == null || lastLookupRequest
+        .plusSeconds(pRepository.getMetadataMaxAgeInSeconds())
+        .isBefore(Instant.now()))
+    {
+      // we did not calculate it, or the entry expired -> cache the timestamp and resolve it
+      invalidLookupRequestCache.put(Map.entry(pRepository, pGav), Instant.now());
+      return true;
+    }
+
+    return false;
   }
 
   /**
