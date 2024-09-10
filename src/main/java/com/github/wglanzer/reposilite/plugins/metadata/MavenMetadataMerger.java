@@ -51,8 +51,7 @@ class MavenMetadataMerger
     String release;
     String latest;
     List<String> versions;
-    Snapshot snapshot = null;
-    List<SnapshotVersion> snapshotVersions = null;
+    List<Plugin> plugins;
     String lastUpdated = LAST_UPDATED_FORMAT.format(new Date());
 
     // Find groupId and artifactId
@@ -93,11 +92,21 @@ class MavenMetadataMerger
           .flatMap(Collection::stream)
           .filter(pV -> !versions.contains(pV))
           .forEach(versions::add);
-
     versions.sort(Comparator.comparing(ComparableVersion::new));
 
+    // Update Plugins
+    plugins = new ArrayList<>();
+    for (Metadata mergeMeta : metadataSet)
+      Stream.ofNullable(mergeMeta.getPlugins())
+          .filter(Objects::nonNull)
+          .flatMap(List::stream)
+          .filter(Objects::nonNull)
+          .filter(pPlugin -> plugins.stream()
+              .noneMatch(pAlreadyExistingPlugin -> Objects.equals(pAlreadyExistingPlugin.getPrefix(), pPlugin.getPrefix())))
+          .forEach(plugins::add);
+
     // Create a new Metadata instance and return
-    return new Metadata(groupId, artifactId, null, new Versioning(release, latest, versions, null, null, lastUpdated), null);
+    return new Metadata(groupId, artifactId, null, new Versioning(release, latest, versions, null, null, lastUpdated), plugins);
   }
 
 }
