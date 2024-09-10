@@ -6,6 +6,7 @@ import org.jetbrains.annotations.NonNls;
 
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
 /**
@@ -48,8 +49,8 @@ class MavenMetadataMerger
   {
     String groupId;
     String artifactId;
-    String release;
-    String latest;
+    AtomicReference<String> releaseRef = new AtomicReference<>(null);
+    AtomicReference<String> latestRef = new AtomicReference<>(null);
     List<String> versions;
     List<Plugin> plugins;
     String lastUpdated = LAST_UPDATED_FORMAT.format(new Date());
@@ -67,20 +68,14 @@ class MavenMetadataMerger
         .orElse(null);
 
     // Update Release / Latest
-    release = metadataSet.stream()
+    metadataSet.stream()
         .map(Metadata::getVersioning)
         .filter(Objects::nonNull)
-        .map(Versioning::getRelease)
-        .filter(Objects::nonNull)
-        .max(Comparator.comparing(ComparableVersion::new))
-        .orElse(null);
-    latest = metadataSet.stream()
-        .map(Metadata::getVersioning)
-        .filter(Objects::nonNull)
-        .map(Versioning::getLatest)
-        .filter(Objects::nonNull)
-        .max(Comparator.comparing(ComparableVersion::new))
-        .orElse(null);
+        .max(Comparator.nullsFirst(Comparator.comparing(Versioning::getLastUpdated)))
+        .ifPresent(pV -> {
+          releaseRef.set(pV.getRelease());
+          latestRef.set(pV.getLatest());
+        });
 
     // Update Versions
     versions = new ArrayList<>();
@@ -106,7 +101,7 @@ class MavenMetadataMerger
           .forEach(plugins::add);
 
     // Create a new Metadata instance and return
-    return new Metadata(groupId, artifactId, null, new Versioning(release, latest, versions, null, null, lastUpdated), plugins);
+    return new Metadata(groupId, artifactId, null, new Versioning(releaseRef.get(), latestRef.get(), versions, null, null, lastUpdated), plugins);
   }
 
 }
