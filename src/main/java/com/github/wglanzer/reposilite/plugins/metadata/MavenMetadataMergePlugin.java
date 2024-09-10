@@ -20,12 +20,12 @@ import java.util.*;
 import static com.fasterxml.jackson.databind.SerializationFeature.INDENT_OUTPUT;
 
 /**
- * Main entry point for this reposilite plugin
+ * Main entry point for this reposilite plugin, to merge metadata files based on its mirror upstreams.
  *
  * @author w.glanzer, 07.09.2024
  */
-@Plugin(name = "metadata", dependencies = "maven")
-public class MavenMetadataPlugin extends ReposilitePlugin
+@Plugin(name = "metadata-merge", dependencies = "maven")
+public class MavenMetadataMergePlugin extends ReposilitePlugin
 {
   private static final XmlMapper XML_MAPPER = XmlMapper.xmlBuilder()
       .addModules(new JacksonXmlModule(), new KotlinModule.Builder().build())
