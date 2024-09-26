@@ -1,6 +1,5 @@
 package com.github.wglanzer.reposilite.plugins.metadata;
 
-import com.google.common.base.Strings;
 import com.reposilite.maven.api.*;
 import org.apache.maven.artifact.versioning.ComparableVersion;
 import org.jetbrains.annotations.*;
@@ -74,7 +73,7 @@ class MavenMetadataMerger
         }))
         .ifPresentOrElse(pV -> {
           releaseRef.set(pV.getRelease());
-          latestRef.set(Strings.isNullOrEmpty(pV.getLatest()) ? pV.getRelease() : pV.getLatest());
+          latestRef.set(pV.getRelease());
           lastUpdatedRef.set(pV.getLastUpdated());
         }, () -> lastUpdatedRef.set(LAST_UPDATED_FORMAT.format(new Date())));
 
