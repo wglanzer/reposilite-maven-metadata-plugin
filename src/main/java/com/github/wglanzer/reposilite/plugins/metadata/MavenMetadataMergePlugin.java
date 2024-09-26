@@ -91,7 +91,6 @@ public class MavenMetadataMergePlugin extends ReposilitePlugin
                   return null;
                 }
               })
-              .peek(merger::add)
               .orNull();
 
           // if we got a current metadata file already, we can check the validity without scraping the mirrors.
@@ -118,7 +117,7 @@ public class MavenMetadataMergePlugin extends ReposilitePlugin
             return;
 
           // merge the metadata now
-          Metadata mergedMeta = merger.merge();
+          Metadata mergedMeta = merger.merge(currentMetadata);
 
           // validate the created metadata to get sure, that we do not store metadata for specific versions
           if (!validateCoordinates(mergedMeta, pEvent.getGav()))

@@ -2,7 +2,7 @@ package com.github.wglanzer.reposilite.plugins.metadata;
 
 import com.reposilite.maven.api.*;
 import org.apache.maven.artifact.versioning.ComparableVersion;
-import org.jetbrains.annotations.NonNls;
+import org.jetbrains.annotations.*;
 
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -41,11 +41,13 @@ class MavenMetadataMerger
    * Merges the previously given metadata files into a single one,
    * so the returned contains the correct information about all of it
    *
+   * @param pBaseMetadata {@link Metadata} that acts as a "base" and should be a proxy repository metadata.
+   *                      This does not get asked for release/latest versions, because it is always newer than our base repositories.
    * @return the merged {@link Metadata}
    * @see #add(Metadata)
    */
   @NonNls
-  public Metadata merge()
+  public Metadata merge(@Nullable Metadata pBaseMetadata)
   {
     String groupId;
     String artifactId;
@@ -54,6 +56,20 @@ class MavenMetadataMerger
     List<String> versions;
     List<Plugin> plugins;
     String lastUpdated = LAST_UPDATED_FORMAT.format(new Date());
+
+    // Update Release / Latest
+    metadataSet.stream()
+        .map(Metadata::getVersioning)
+        .filter(Objects::nonNull)
+        .max(Comparator.nullsFirst(Comparator.comparing(Versioning::getLastUpdated)))
+        .ifPresent(pV -> {
+          releaseRef.set(pV.getRelease());
+          latestRef.set(pV.getLatest());
+        });
+
+    // Add the base metadata now, because we now know the release/latest versions
+    if (pBaseMetadata != null)
+      metadataSet.add(pBaseMetadata);
 
     // Find groupId and artifactId
     groupId = metadataSet.stream()
@@ -66,16 +82,6 @@ class MavenMetadataMerger
         .filter(Objects::nonNull)
         .findFirst()
         .orElse(null);
-
-    // Update Release / Latest
-    metadataSet.stream()
-        .map(Metadata::getVersioning)
-        .filter(Objects::nonNull)
-        .max(Comparator.nullsFirst(Comparator.comparing(Versioning::getLastUpdated)))
-        .ifPresent(pV -> {
-          releaseRef.set(pV.getRelease());
-          latestRef.set(pV.getLatest());
-        });
 
     // Update Versions
     versions = new ArrayList<>();
