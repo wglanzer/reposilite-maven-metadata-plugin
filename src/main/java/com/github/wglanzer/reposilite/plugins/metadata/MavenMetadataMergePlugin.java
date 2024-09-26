@@ -45,6 +45,12 @@ public class MavenMetadataMergePlugin extends ReposilitePlugin
    */
   private final Map<Map.Entry<Repository, Location>, Instant> invalidLookupRequestCache = new ConcurrentHashMap<>();
 
+  /**
+   * Cache that contains the previously deployed locations.
+   * If a location was pre-resolved again, the metadata gets recreated anyways.
+   */
+  private final Set<Location> deployedLocations = Collections.synchronizedSet(new HashSet<>());
+
   @Nullable
   @Override
   public Facade initialize()
@@ -132,7 +138,13 @@ public class MavenMetadataMergePlugin extends ReposilitePlugin
     });
 
     // Invalidate the requestCache on deploy - the artifacts may be there now
-    extensions().registerEvent(DeployEvent.class, pEvent -> invalidLookupRequestCache.clear());
+    extensions().registerEvent(DeployEvent.class, pEvent -> {
+      invalidLookupRequestCache.clear();
+
+      // proxy all deployed metadata, that should be regenerated afterward
+      if (pEvent.getGav().endsWith("maven-metadata.xml"))
+        deployedLocations.add(pEvent.getGav());
+    });
 
     return null;
   }
@@ -146,6 +158,10 @@ public class MavenMetadataMergePlugin extends ReposilitePlugin
    */
   private boolean shouldRegenerateMetadata(@NonNls Repository pRepository, @NonNls Location pGav)
   {
+    // If this location was deployed to, we have to regenerate our metadata from scratch
+    if (deployedLocations.remove(pGav))
+      return true;
+
     // Try to resolve the real "lastModified" timestamp
     Result<FileTime, ErrorResponse> lastModifiedTimeResult = pRepository.getStorageProvider().getLastModifiedTime(pGav);
     if (lastModifiedTimeResult.isOk())
@@ -153,7 +169,6 @@ public class MavenMetadataMergePlugin extends ReposilitePlugin
       return lastModifiedTimeResult.get().toInstant()
           .plusSeconds(pRepository.getMetadataMaxAgeInSeconds())
           .isBefore(Instant.now());
-
 
     // we did not find the file on our local storage -> lookup in request cache to prevent invalids from spamming to the mirrors
     Instant lastLookupRequest = invalidLookupRequestCache.get(Map.entry(pRepository, pGav));
