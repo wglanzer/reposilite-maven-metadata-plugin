@@ -53,19 +53,29 @@ class MavenMetadataMerger
     String artifactId;
     AtomicReference<String> releaseRef = new AtomicReference<>(null);
     AtomicReference<String> latestRef = new AtomicReference<>(null);
+    AtomicReference<String> lastUpdatedRef = new AtomicReference<>();
     List<String> versions;
     List<Plugin> plugins;
-    String lastUpdated = LAST_UPDATED_FORMAT.format(new Date());
 
     // Update Release / Latest
     metadataSet.stream()
         .map(Metadata::getVersioning)
         .filter(Objects::nonNull)
-        .max(Comparator.nullsFirst(Comparator.comparing(Versioning::getLastUpdated)))
-        .ifPresent(pV -> {
+        .max(Comparator.comparing(pVersioning -> {
+          try
+          {
+            return LAST_UPDATED_FORMAT.parse(pVersioning.getLastUpdated());
+          }
+          catch (Exception e)
+          {
+            return new Date(0);
+          }
+        }))
+        .ifPresentOrElse(pV -> {
           releaseRef.set(pV.getRelease());
           latestRef.set(pV.getLatest());
-        });
+          lastUpdatedRef.set(pV.getLastUpdated());
+        }, () -> lastUpdatedRef.set(LAST_UPDATED_FORMAT.format(new Date())));
 
     // Add the base metadata now, because we now know the release/latest versions
     if (pBaseMetadata != null)
@@ -107,7 +117,8 @@ class MavenMetadataMerger
           .forEach(plugins::add);
 
     // Create a new Metadata instance and return
-    return new Metadata(groupId, artifactId, null, new Versioning(releaseRef.get(), latestRef.get(), versions, null, null, lastUpdated), plugins);
+    return new Metadata(groupId, artifactId, null, new Versioning(releaseRef.get(), latestRef.get(), versions, null, null, lastUpdatedRef.get()),
+                        plugins);
   }
 
 }
