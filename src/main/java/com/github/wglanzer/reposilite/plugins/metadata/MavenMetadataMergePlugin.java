@@ -98,17 +98,27 @@ public class MavenMetadataMergePlugin extends ReposilitePlugin
           if (currentMetadata != null && !validateCoordinates(currentMetadata, pEvent.getGav()))
             return;
 
+          // extract the current groupID
+          String currentGroupID = currentMetadata == null ? null : currentMetadata.getGroupId();
+
           // collect all metadata from mirrors
           for (MirrorHost mirror : pEvent.getRepository().getMirrorHosts())
           {
-            Metadata mirrorMetadata = downloadMetadataFromMirror(mirror, pEvent.getGav());
-            if (mirrorMetadata != null)
-            {
-              // validate here too, because we may now be able to resolve all necessary data
-              if (!validateCoordinates(mirrorMetadata, pEvent.getGav()))
-                return;
+            List<String> allowedGroups = mirror.getConfiguration().getAllowedGroups();
 
-              merger.add(mirrorMetadata);
+            // check, if the "allowed groups" are empty or the groupID can not be determined.
+            // If both, allowed groups and the groupID, are resolvable, the allowedGroups have to contain the requested ID.
+            if (allowedGroups.isEmpty() || currentGroupID == null || allowedGroups.stream().anyMatch(currentGroupID::startsWith))
+            {
+              Metadata mirrorMetadata = downloadMetadataFromMirror(mirror, pEvent.getGav());
+              if (mirrorMetadata != null)
+              {
+                // validate here too, because we may now be able to resolve all necessary data
+                if (!validateCoordinates(mirrorMetadata, pEvent.getGav()))
+                  return;
+
+                merger.add(mirrorMetadata);
+              }
             }
           }
 
