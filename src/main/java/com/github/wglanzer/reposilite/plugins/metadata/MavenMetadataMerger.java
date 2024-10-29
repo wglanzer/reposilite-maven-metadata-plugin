@@ -24,7 +24,7 @@ class MavenMetadataMerger
    *
    * @param pMetadata metadata that should be merged
    */
-  public void add(@NonNls Metadata pMetadata)
+  public synchronized void add(@NonNls Metadata pMetadata)
   {
     metadataSet.add(pMetadata);
   }
@@ -32,7 +32,7 @@ class MavenMetadataMerger
   /**
    * @return true, if the backing list is empty and nothing is about to be merged
    */
-  public boolean isEmpty()
+  public synchronized boolean isEmpty()
   {
     return metadataSet.isEmpty();
   }
@@ -47,7 +47,7 @@ class MavenMetadataMerger
    * @see #add(Metadata)
    */
   @NonNls
-  public Metadata merge(@Nullable Metadata pBaseMetadata)
+  public synchronized Metadata merge(@Nullable Metadata pBaseMetadata)
   {
     String groupId;
     String artifactId;

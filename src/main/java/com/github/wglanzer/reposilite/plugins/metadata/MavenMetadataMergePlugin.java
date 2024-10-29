@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.*;
 import com.fasterxml.jackson.dataformat.xml.*;
 import com.fasterxml.jackson.dataformat.xml.ser.ToXmlGenerator;
 import com.fasterxml.jackson.module.kotlin.KotlinModule;
+import com.reposilite.Reposilite;
 import com.reposilite.maven.*;
 import com.reposilite.maven.api.*;
 import com.reposilite.plugin.api.Plugin;
@@ -16,7 +17,8 @@ import panda.std.Result;
 import java.nio.file.attribute.FileTime;
 import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.fasterxml.jackson.databind.SerializationFeature.INDENT_OUTPUT;
 
@@ -98,29 +100,45 @@ public class MavenMetadataMergePlugin extends ReposilitePlugin
           if (currentMetadata != null && !validateCoordinates(currentMetadata, pEvent.getGav()))
             return;
 
-          // extract the current groupID
+          // extract the current groupID, including executor
           String currentGroupID = currentMetadata == null ? null : currentMetadata.getGroupId();
+          ExecutorService executorService = extensions().facade(Reposilite.class).getIoService();
+          AtomicBoolean validCoordinates = new AtomicBoolean(true);
 
           // collect all metadata from mirrors
-          for (MirrorHost mirror : pEvent.getRepository().getMirrorHosts())
-          {
-            List<String> allowedGroups = mirror.getConfiguration().getAllowedGroups();
+          CompletableFuture.allOf(
+              pEvent.getRepository().getMirrorHosts().stream()
+                  .map(pMirror -> {
+                    List<String> allowedGroups = pMirror.getConfiguration().getAllowedGroups();
 
-            // check, if the "allowed groups" are empty or the groupID can not be determined.
-            // If both, allowed groups and the groupID, are resolvable, the allowedGroups have to contain the requested ID.
-            if (allowedGroups.isEmpty() || currentGroupID == null || allowedGroups.stream().anyMatch(currentGroupID::startsWith))
-            {
-              Metadata mirrorMetadata = downloadMetadataFromMirror(mirror, pEvent.getGav());
-              if (mirrorMetadata != null)
-              {
-                // validate here too, because we may now be able to resolve all necessary data
-                if (!validateCoordinates(mirrorMetadata, pEvent.getGav()))
-                  return;
+                    // check, if the "allowed groups" are empty or the groupID can not be determined.
+                    // If both, allowed groups and the groupID, are resolvable, the allowedGroups have to contain the requested ID.
+                    if (allowedGroups.isEmpty() || currentGroupID == null || allowedGroups.stream().anyMatch(currentGroupID::startsWith))
+                      return CompletableFuture.runAsync(() -> {
+                        // Only do anything, if we seem to be valid
+                        if (validCoordinates.get())
+                        {
+                          Metadata mirrorMetadata = downloadMetadataFromMirror(pMirror, pEvent.getGav());
+                          if (mirrorMetadata != null)
+                          {
+                            // validate now and invalidate, if we are invalid
+                            if (validateCoordinates(mirrorMetadata, pEvent.getGav()))
+                              merger.add(mirrorMetadata);
+                            else
+                              validCoordinates.set(false);
+                          }
+                        }
+                      }, executorService);
 
-                merger.add(mirrorMetadata);
-              }
-            }
-          }
+                    return null;
+                  })
+                  .filter(Objects::nonNull)
+                  .toArray(CompletableFuture[]::new)
+          ).join();
+
+          // do not merge anything, if we are invalid
+          if (!validCoordinates.get())
+            return;
 
           // if we got no mirrors, do not merge them
           if (merger.isEmpty())
