@@ -106,6 +106,7 @@ public class MavenMetadataMergePlugin extends ReposilitePlugin
           AtomicBoolean validCoordinates = new AtomicBoolean(true);
 
           // collect all metadata from mirrors
+          Set<String> downloadedMirrorHost = Collections.synchronizedSet(new TreeSet<>(String.CASE_INSENSITIVE_ORDER));
           CompletableFuture.allOf(
               pEvent.getRepository().getMirrorHosts().stream()
                   .map(pMirror -> {
@@ -118,14 +119,23 @@ public class MavenMetadataMergePlugin extends ReposilitePlugin
                         // Only do anything, if we seem to be valid
                         if (validCoordinates.get())
                         {
-                          Metadata mirrorMetadata = downloadMetadataFromMirror(pMirror, pEvent.getGav());
-                          if (mirrorMetadata != null)
+                          long startDownloadTime = System.currentTimeMillis();
+
+                          try
                           {
-                            // validate now and invalidate, if we are invalid
-                            if (validateCoordinates(mirrorMetadata, pEvent.getGav()))
-                              merger.add(mirrorMetadata);
-                            else
-                              validCoordinates.set(false);
+                            Metadata mirrorMetadata = downloadMetadataFromMirror(pMirror, pEvent.getGav());
+                            if (mirrorMetadata != null)
+                            {
+                              // validate now and invalidate, if we are invalid
+                              if (validateCoordinates(mirrorMetadata, pEvent.getGav()))
+                                merger.add(mirrorMetadata);
+                              else
+                                validCoordinates.set(false);
+                            }
+                          }
+                          finally
+                          {
+                            downloadedMirrorHost.add(pMirror.getHost() + " [" + (System.currentTimeMillis() - startDownloadTime) + "ms]");
                           }
                         }
                       }, executorService);
@@ -135,6 +145,9 @@ public class MavenMetadataMergePlugin extends ReposilitePlugin
                   .filter(Objects::nonNull)
                   .toArray(CompletableFuture[]::new)
           ).join();
+
+          // log, where we downloaded from
+          getLogger().info("Downloaded newer metadata for {} from mirrors: {}", pEvent.getGav(), String.join(", ", downloadedMirrorHost));
 
           // do not merge anything, if we are invalid
           if (!validCoordinates.get())
